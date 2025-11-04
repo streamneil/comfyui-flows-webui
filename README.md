@@ -11,6 +11,7 @@ FastAPI-based web services for ComfyUI workflows, featuring Wan2.2 Image-to-Vide
 - **Wan2.2 I2V 14B**: Fast 4-step image-to-video generation service
 - **Async & Sync APIs**: Choose between immediate results or background processing
 - **REST API**: Clean, well-documented FastAPI endpoints
+- **Systemd Integration**: Production-ready service management with auto-restart
 - **Health Monitoring**: Built-in health checks and status queries
 - **CORS Support**: Ready for web application integration
 - **Comprehensive Testing**: Includes test scripts and documentation
@@ -83,6 +84,29 @@ Service will be available at:
 ```bash
 ./start_image2video_server.sh
 ```
+
+### Production Deployment with Systemd
+
+For production servers, install as a systemd service for automatic startup and management:
+
+```bash
+# Install service
+./install_service.sh
+
+# Manage service
+sudo systemctl start comfyui-flows-webui
+sudo systemctl stop comfyui-flows-webui
+sudo systemctl restart comfyui-flows-webui
+sudo systemctl status comfyui-flows-webui
+
+# Enable auto-start on boot
+sudo systemctl enable comfyui-flows-webui
+
+# View logs
+sudo journalctl -u comfyui-flows-webui -f
+```
+
+See [SYSTEMD_SERVICE.md](SYSTEMD_SERVICE.md) for complete systemd deployment guide.
 
 ## 📖 API Usage
 
@@ -179,7 +203,10 @@ comfyui-flows-webui/
 │
 ├── Startup Scripts/
 │   ├── start_wan22_i2v_14b_4_service.sh   # Start Wan2.2 service
-│   └── start_image2video_server.sh        # Start Image2Video service
+│   ├── start_image2video_server.sh        # Start Image2Video service
+│   ├── install_service.sh                 # Install systemd service
+│   ├── uninstall_service.sh               # Uninstall systemd service
+│   └── comfyui-flows-webui.service.template  # Systemd template
 │
 ├── Testing/
 │   ├── test_wan22_i2v_14b_4_service.py    # Comprehensive test
@@ -195,7 +222,8 @@ comfyui-flows-webui/
     ├── WAN22_SERVICE_README.md       # Wan2.2 service docs
     ├── TEST_GUIDE.md                 # Testing guide
     ├── SERVICES_OVERVIEW.md          # All services overview
-    └── TROUBLESHOOTING.md            # Troubleshooting guide
+    ├── TROUBLESHOOTING.md            # Troubleshooting guide
+    └── SYSTEMD_SERVICE.md            # Systemd deployment guide
 ```
 
 ## ⚙️ Configuration

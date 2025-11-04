@@ -1,0 +1,26 @@
+[Unit]
+Description=ComfyUI Flows WebUI - Wan2.2 I2V 14B Service
+After=network.target
+
+[Service]
+Type=simple
+User={{USER}}
+Group={{GROUP}}
+WorkingDirectory={{WORKING_DIR}}
+Environment="PATH={{PYTHON_PATH}}:$PATH"
+ExecStart={{PYTHON_BIN}} {{WORKING_DIR}}/wan22_i2v_14b_4.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=comfyui-flows-webui
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths={{WORKING_DIR}}
+
+[Install]
+WantedBy=multi-user.target
