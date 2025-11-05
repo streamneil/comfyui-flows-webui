@@ -83,4 +83,5 @@ echo -e "${BLUE}========================================${NC}"
 echo
 
 # 启动服务
-$PYTHON_CMD wan22_i2v_14b_4.py
+nohup $PYTHON_CMD wan22_i2v_14b_4.py > log.txt 2>&1 &
+
