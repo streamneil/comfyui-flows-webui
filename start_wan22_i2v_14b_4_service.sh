@@ -37,7 +37,7 @@ if conda env list | grep -q "^${CONDA_ENV_NAME} "; then
     echo -e "${GREEN}✓ 虚拟环境 '${CONDA_ENV_NAME}' 已存在${NC}"
 else
     echo -e "${YELLOW}虚拟环境 '${CONDA_ENV_NAME}' 不存在，正在创建...${NC}"
-    conda create -n ${CONDA_ENV_NAME} python=3.10 -y
+    conda create -n ${CONDA_ENV_NAME} python=3.12 -y
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓ 虚拟环境创建成功${NC}"
     else
