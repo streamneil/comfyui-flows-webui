@@ -45,6 +45,9 @@ venv.bak/
 .env.local
 .env.*.local
 
+# Configuration files with sensitive data
+config.ini
+
 # Logs
 *.log
 logs/
