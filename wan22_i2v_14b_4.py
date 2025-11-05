@@ -40,7 +40,7 @@ def load_config():
             f"配置文件不存在: {config_path}\n"
             "请执行以下命令创建配置文件：\n"
             "cp config.example.ini config.ini\n"
-            "然后编辑 config.ini 填入 DeepSeek API Key"
+            "然后编辑 config.ini 填入 Moonshot API Key"
         )
 
     config.read(config_path, encoding='utf-8')
@@ -55,24 +55,24 @@ try:
     COMFYUI_BASE_URL = config.get('comfyui', 'base_url', fallback='http://60.169.65.100:5000')
     COMFYUI_API_URL = f"{COMFYUI_BASE_URL}/cfui/api"
 
-    # DeepSeek API 配置
-    DEEPSEEK_API_KEY = config.get('deepseek', 'api_key', fallback='')
-    DEEPSEEK_API_URL = config.get('deepseek', 'api_url', fallback='https://api.deepseek.com/v1/chat/completions')
-    DEEPSEEK_MODEL = config.get('deepseek', 'model', fallback='deepseek-chat')
+    # Moonshot AI API 配置
+    MOONSHOT_API_KEY = config.get('moonshot', 'api_key', fallback='')
+    MOONSHOT_API_URL = config.get('moonshot', 'api_url', fallback='https://api.moonshot.cn/v1/chat/completions')
+    MOONSHOT_MODEL = config.get('moonshot', 'model', fallback='moonshot-v1-8k')
 
-    if not DEEPSEEK_API_KEY:
-        logger.warning("DeepSeek API Key 未配置，提示词优化功能将不可用")
+    if not MOONSHOT_API_KEY:
+        logger.warning("Moonshot API Key 未配置，提示词优化功能将不可用")
     else:
-        logger.info("DeepSeek API Key 已加载")
+        logger.info("Moonshot API Key 已加载")
 
 except Exception as e:
     logger.error(f"加载配置文件失败: {e}")
     # 使用默认配置
     COMFYUI_BASE_URL = "http://60.169.65.100:5000"
     COMFYUI_API_URL = f"{COMFYUI_BASE_URL}/cfui/api"
-    DEEPSEEK_API_KEY = ""
-    DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
-    DEEPSEEK_MODEL = "deepseek-chat"
+    MOONSHOT_API_KEY = ""
+    MOONSHOT_API_URL = "https://api.moonshot.cn/v1/chat/completions"
+    MOONSHOT_MODEL = "moonshot-v1-8k"
 
 
 app = FastAPI(
@@ -254,44 +254,61 @@ async def submit_workflow(workflow: Dict[str, Any]) -> str:
             raise HTTPException(status_code=500, detail=f"提交工作流失败: {str(e)}")
 
 
-async def enhance_prompt_with_deepseek(
+async def enhance_prompt_with_moonshot(
     user_prompt: str,
     image_data: Optional[bytes] = None,
     temperature: float = 0.7,
     max_tokens: int = 2000
 ) -> str:
     """
-    使用 DeepSeek API 优化提示词
+    使用 Moonshot AI API 优化提示词（支持视觉输入）
 
     Args:
         user_prompt: 用户输入的提示词
-        image_data: 图片二进制数据（可选，当前API不支持）
+        image_data: 图片二进制数据（可选，支持视觉分析）
         temperature: 生成温度
         max_tokens: 最大token数
 
     Returns:
         优化后的提示词
     """
-    if not DEEPSEEK_API_KEY:
+    if not MOONSHOT_API_KEY:
         raise HTTPException(
             status_code=500,
-            detail="DeepSeek API Key 未配置，请在 config.ini 文件中配置 [deepseek] api_key"
+            detail="Moonshot API Key 未配置，请在 config.ini 文件中配置 [moonshot] api_key"
         )
 
     try:
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}"
+            "Authorization": f"Bearer {MOONSHOT_API_KEY}"
         }
 
-        # 注意：DeepSeek 当前的 API (deepseek-chat) 不支持图片输入
-        # 即使提供了图片，也只能使用文本提示词
-        if image_data:
-            logger.warning(f"收到图片数据（{len(image_data)} bytes），但 DeepSeek API 当前不支持视觉输入，将仅使用文本提示词")
+        # 构建用户消息内容
+        user_content = []
 
-        # 构建消息 - 仅使用文本
+        # 如果有图片，先添加图片
+        if image_data:
+            # 将图片转换为 base64
+            image_base64 = base64.b64encode(image_data).decode('utf-8')
+            logger.info(f"已接收图片数据（{len(image_data)} bytes），正在使用视觉模型分析")
+
+            user_content.append({
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/jpeg;base64,{image_base64}"
+                }
+            })
+
+        # 添加文本提示词
+        user_content.append({
+            "type": "text",
+            "text": user_prompt
+        })
+
+        # 构建消息
         payload = {
-            "model": DEEPSEEK_MODEL,
+            "model": MOONSHOT_MODEL,
             "messages": [
                 {
                     "role": "system",
@@ -299,7 +316,7 @@ async def enhance_prompt_with_deepseek(
                 },
                 {
                     "role": "user",
-                    "content": user_prompt
+                    "content": user_content if image_data else user_prompt
                 }
             ],
             "temperature": temperature,
@@ -308,7 +325,7 @@ async def enhance_prompt_with_deepseek(
 
         async with httpx.AsyncClient(timeout=120.0, proxies={}) as client:
             response = await client.post(
-                DEEPSEEK_API_URL,
+                MOONSHOT_API_URL,
                 json=payload,
                 headers=headers
             )
@@ -318,15 +335,17 @@ async def enhance_prompt_with_deepseek(
             # 提取生成的内容
             enhanced_prompt = result["choices"][0]["message"]["content"]
             logger.info(f"提示词优化成功，原始长度: {len(user_prompt)}, 优化后长度: {len(enhanced_prompt)}")
+            if image_data:
+                logger.info("已使用视觉模型分析图片内容")
             return enhanced_prompt
 
     except httpx.HTTPError as e:
-        logger.error(f"调用 DeepSeek API 失败: {e}")
+        logger.error(f"调用 Moonshot API 失败: {e}")
         if hasattr(e, 'response') and e.response:
             logger.error(f"响应内容: {e.response.text}")
-        raise HTTPException(status_code=500, detail=f"调用 DeepSeek API 失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"调用 Moonshot API 失败: {str(e)}")
     except KeyError as e:
-        logger.error(f"解析 DeepSeek API 响应失败: {e}")
+        logger.error(f"解析 Moonshot API 响应失败: {e}")
         raise HTTPException(status_code=500, detail=f"解析 API 响应失败: {str(e)}")
     except Exception as e:
         logger.error(f"优化提示词时发生未知错误: {e}")
@@ -548,19 +567,18 @@ async def get_task_status(prompt_id: str):
 @app.post("/api/enhance_prompt", response_model=PromptEnhanceResponse)
 async def enhance_prompt(
     user_prompt: str = Form(..., description="用户输入的简单提示词"),
-    image: Optional[UploadFile] = File(None, description="要转换为视频的图片（当前不支持，保留用于未来）"),
+    image: Optional[UploadFile] = File(None, description="要转换为视频的图片（支持视觉分析）"),
     temperature: float = Form(0.7, description="生成温度"),
     max_tokens: int = Form(2000, description="最大生成token数")
 ):
     """
     提示词优化接口
 
-    使用 DeepSeek AI 根据用户提示词，生成高质量的图生视频提示词。
+    使用 Moonshot AI 视觉模型根据用户提示词和图片，生成高质量的图生视频提示词。
 
-    **注意**：当前 DeepSeek API (deepseek-chat) 不支持图片输入，即使上传图片也仅会使用文本提示词。
-    如需图片分析功能，请考虑使用支持视觉的 AI 模型（如 GPT-4V）。
+    **支持视觉输入**：Moonshot AI 支持图片分析，可以结合图片内容生成更准确的提示词。
 
-    该接口会根据用户描述，生成包含以下部分的详细提示词：
+    该接口会根据用户描述和图片内容，生成包含以下部分的详细提示词：
     - 主体描述：详细的主体特征
     - 背景描述：场景和环境细节
     - 运动描述：合理的动作和变化
@@ -568,7 +586,7 @@ async def enhance_prompt(
 
     参数：
     - user_prompt: 用户的简单提示词（必填）
-    - image: 图片文件（当前不支持，保留用于未来扩展）
+    - image: 图片文件（可选，支持视觉分析）
     - temperature: 生成温度，默认 0.7
     - max_tokens: 最大生成 token 数，默认 2000
     """
@@ -583,8 +601,8 @@ async def enhance_prompt(
         else:
             logger.info("未上传图片，仅使用文本提示词")
 
-        # 调用 DeepSeek API 优化提示词
-        enhanced_prompt = await enhance_prompt_with_deepseek(
+        # 调用 Moonshot API 优化提示词
+        enhanced_prompt = await enhance_prompt_with_moonshot(
             user_prompt=user_prompt,
             image_data=image_data,
             temperature=temperature,
@@ -595,7 +613,7 @@ async def enhance_prompt(
             original_prompt=user_prompt,
             enhanced_prompt=enhanced_prompt,
             status="success",
-            message="提示词优化成功" + ("（注意：图片已上传但当前 API 不支持视觉分析，仅使用文本提示词）" if image_data else "")
+            message="提示词优化成功" + ("（已使用视觉模型分析图片内容）" if image_data else "")
         )
 
     except HTTPException:
